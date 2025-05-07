@@ -1,78 +1,45 @@
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import DataLoader, Dataset
+import pandas as pd
 
-# Dummy Dataset (Replace this with your actual dataset)
-class DummyHandwritingDataset(Dataset):
-    def __init__(self):
-        self.data = [torch.randint(0, 13, (10,)) for _ in range(100)]
-        self.labels = [torch.randint(0, 13, (10,)) for _ in range(100)]
+df = pd.read_csv('C:\\Users\\admin\\Downloads\\advertising.csv')
 
-    def __len__(self):
-        return len(self.data)
+print(df.head())
 
-    def __getitem__(self, idx):
-        return self.data[idx], self.labels[idx]
+# Summary statistics
+print(df.describe())
 
-# RNN Model
-class HandwritingRNN(nn.Module):
-    def __init__(self, vocab_size, embedding_dim, hidden_dim, output_dim):
-        super(HandwritingRNN, self).__init__()
-        self.embedding = nn.Embedding(vocab_size, embedding_dim)
-        self.rnn = nn.RNN(embedding_dim, hidden_dim, batch_first=True)
-        self.fc = nn.Linear(hidden_dim, output_dim)
+# Check for missing values
+print(df.isnull().sum())
+import seaborn as sns
+import matplotlib.pyplot as plt
 
-    def forward(self, x, hidden):
-        x = self.embedding(x)
-        output, hidden = self.rnn(x, hidden)
-        output = self.fc(output.reshape(-1, output.shape[2]))  # Flatten for loss
-        return output, hidden
+# Pair plot to visualize relationships
+sns.pairplot(df)
+plt.show()
 
-    def init_hidden(self, batch_size):
-        # RNN hidden state: (num_layers * num_directions, batch, hidden_dim)
-        return torch.zeros(1, batch_size, hidden_dim)
+# Correlation heatmap
+sns.heatmap(df.corr(), annot=True)
+plt.show()
+from sklearn.model_selection import train_test_split
 
-# Training loop
-def train(model, dataloader, criterion, optimizer, device):
-    model.train()
-    total_loss = 0
+X = df[['TV', 'Radio', 'Newspaper']]
+y = df['Sales']
 
-    for i, (inputs, targets) in enumerate(dataloader):
-        inputs, targets = inputs.to(device), targets.to(device)
-        hidden = model.init_hidden(inputs.size(0)).to(device)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_squared_error, r2_score
 
-        optimizer.zero_grad()
-        outputs, hidden = model(inputs, hidden)
-        loss = criterion(outputs, targets.view(-1))  # Flatten targets
+# Model training
+model = LinearRegression()
+model.fit(X_train, y_train)
 
-        loss.backward()
-        optimizer.step()
+# Predictions
+y_pred = model.predict(X_test)
 
-        total_loss += loss.item()
-        print(f"Batch {i+1}/{len(dataloader)}, Loss: {loss.item():.4f}")
-
-    return total_loss / len(dataloader)
-
-# Main
-if __name__ == "__main__":
-    # Setup
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    vocab_size = 13
-    embedding_dim = 16
-    hidden_dim = 32
-    output_dim = vocab_size
-    batch_size = 16
-    epochs = 2
-
-    model = HandwritingRNN(vocab_size, embedding_dim, hidden_dim, output_dim).to(device)
-    criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
-
-    dataset = DummyHandwritingDataset()
-    train_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
-
-    for epoch in range(epochs):
-        print(f"\nEpoch {epoch+1}/{epochs}")
-        train_loss = train(model, train_loader, criterion, optimizer, device)
-        print(f"Epoch {epoch+1} completed, Avg Loss: {train_loss:.4f}")
+# Evaluation
+print("R² Score:", r2_score(y_test, y_pred))
+print("MSE:", mean_squared_error(y_test, y_pred))
+plt.scatter(y_test, y_pred)
+plt.xlabel("Actual Sales")
+plt.ylabel("Predicted Sales")
+plt.title("Actual vs Predicted Sales")
+plt.show()
